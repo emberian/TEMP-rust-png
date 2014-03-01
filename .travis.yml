@@ -15,7 +15,7 @@
 
 env:
   global:
-    - secure: d0ai0sK6NFiz+822DaAKAGcJXjC6dBFLGOjqjACcsoqDtRH85HR9IVUnwCsNVPvH05frEutD5Ebd9SzrjqPriTNnzM0iwZZBxHgiHV+SAYcL/D+qyeEAB/IYU5jZxjYgq/6fHA2VhXI56rGqBRwoXe1sLsEAaTfDmo9gVi6xhQo=
+    - secure: A4zMxiRFG2mhiaZUqifnwMDGQkSKkBTaZlMCgJezsvzRzHvwPHmsI5vFRkpGvADFiMPpaorLzTc47qbHN0FCenhd/nBIOhZmmlX7Igd9mqJlh30LqLQ1ekCbMLhbpLeytgM/JsLJMjfjwfdhV0cvcsHH6T8wlGItiIYAHrQA4n4=
 before_install:
   - yes | sudo add-apt-repository ppa:hansjorg/rust
   - sudo apt-get update
@@ -23,5 +23,7 @@ install:
   - sudo apt-get install rust-nightly
 script:
   - rustc lib.rs
+  - mkdir doc
+  - rustdoc -o doc lib.rs
 after_script:
   - curl http://www.rust-ci.org/artifacts/put?t=$RUSTCI_TOKEN | sh

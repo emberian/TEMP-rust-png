@@ -8,11 +8,13 @@
 // except according to those terms.
 
 #[crate_id = "png#0.1"];
-
+#[crate_type = "lib"];
 #[feature(macro_rules)];
 
+#[deny(warnings)];
+
 #[cfg(test)]
-extern mod extra;
+extern crate extra;
 
 use std::cast;
 use std::cmp::min;
@@ -24,16 +26,9 @@ use std::num::abs;
 use std::str::from_utf8;
 use std::vec;
 
-#[cfg(not(use_zlib))]
 use inflate::InflateStream;
 
-#[cfg(use_zlib)]
-use zlib::InflateStream;
-
-#[cfg(not(use_zlib))]
 mod inflate;
-#[cfg(use_zlib)]
-mod zlib;
 
 #[deriving(Eq)]
 pub enum ColorType {
@@ -1068,7 +1063,7 @@ pub fn is_png(image: &[u8]) -> bool {
     }
 }*/
 
-fn load_png(path: &Path) -> Result<Image, ~str> {
+pub fn load_png(path: &Path) -> Result<Image, ~str> {
     match File::open_mode(path, io::Open, io::Read) {
         Ok(mut r) => match r.read_to_end() {
             Ok(data) => load_png_from_memory(data),
@@ -1078,7 +1073,7 @@ fn load_png(path: &Path) -> Result<Image, ~str> {
     }
 }
 
-fn load_png_from_memory(image: &[u8]) -> Result<Image, ~str> {
+pub fn load_png_from_memory(image: &[u8]) -> Result<Image, ~str> {
     let mut decoder = Some(~Decoder::new());
     match decoder.update(image) {
         Partial(_) => Err(~"incomplete PNG file"),

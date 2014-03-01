@@ -8,7 +8,7 @@
 // except according to those terms.
 
 use std::iter::range_inclusive;
-use std::num;
+use std::cmp;
 use std::vec;
 use std::vec_ng::Vec;
 
@@ -111,7 +111,7 @@ struct BitStream<'a> {
 // Use this instead of triggering a failure (that may unwind).
 fn abort() -> ! {
     unsafe {
-        ::std::unstable::intrinsics::abort()
+        ::std::intrinsics::abort()
     }
 }
 
@@ -295,7 +295,7 @@ impl DynHuffman16 {
                 let high = BIT_REV_U8[(code << (16 - bits)) & 0xff];
                 let (min_bits, idx) = if patterns[low] != 0xffff {
                     let bits_prev = (patterns[low] >> 12) as u8;
-                    (num::min(bits_prev, bits), patterns[low] & 0x7ff)
+                    (cmp::min(bits_prev, bits), patterns[low] & 0x7ff)
                 } else {
                     rest.push(Trie8bit {
                         data: [0xffff, ..16],
@@ -401,6 +401,7 @@ pub struct InflateStream {
 }
 
 impl InflateStream {
+    #[allow(dead_code)]
     pub fn new() -> InflateStream {
         let state = Bits(BlockHeader, BitState { n: 0, v: 0 });
         let buffer = Vec::with_capacity(32 * 1024);

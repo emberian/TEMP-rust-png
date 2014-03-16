@@ -198,7 +198,7 @@ macro_rules! with_codes (($clens:expr, $max_bits:expr => $code_ty:ty, $cb:expr) 
 struct CodeLengthReader {
     patterns: ~[u8, ..128],
     clens: ~[u8, ..19],
-    result: ~[u8],
+    result: Vec<u8>,
     num_lit: u16,
     num_dist: u8
 }
@@ -217,7 +217,7 @@ impl CodeLengthReader {
         CodeLengthReader {
             patterns: patterns,
             clens: clens,
-            result: vec::with_capacity(num_lit as uint + num_dist as uint),
+            result: Vec::with_capacity(num_lit as uint + num_dist as uint),
             num_lit: num_lit,
             num_dist: num_dist
         }
@@ -274,7 +274,7 @@ struct Trie8bit<T> {
 
 struct DynHuffman16 {
     patterns: ~[u16, ..256],
-    rest: ~[Trie8bit<u16>]
+    rest: Vec<Trie8bit<u16>>
 }
 
 impl DynHuffman16 {
@@ -282,7 +282,7 @@ impl DynHuffman16 {
         // Fill in the 8-bit patterns that match each code.
         // Longer patterns go into the trie.
         let mut patterns = ~([0xffffu16, ..256]);
-        let mut rest = ~[];
+        let mut rest = Vec::new();
         with_codes!(clens, 15 => u16, |i: u16, code: u16, bits: u8| {
             let entry = i | (bits as u16 << 12);
             if bits <= 8 {
@@ -309,7 +309,7 @@ impl DynHuffman16 {
                     (bits, (rest.len() - 1) as u16)
                 };
                 patterns[low] = idx | 0x800 | (min_bits as u16 << 12);
-                let trie_entry = &mut rest[idx];
+                let trie_entry = rest.get_mut(idx as uint);
                 if bits <= 12 {
                     for rest in range(0u8, 1 << (12 - bits)) {
                         trie_entry.data[high | (rest << (bits - 8))] = entry;
@@ -354,7 +354,7 @@ impl DynHuffman16 {
             Some((save, entry & 0xfff))
         } else {
             let has16 = stream.need(16);
-            let trie = &self.rest[entry & 0x7ff];
+            let trie = self.rest.get((entry & 0x7ff) as uint);
             let idx = stream.state.v >> 8;
             let trie_entry = match trie.children[idx & 0xf] {
                 Some(ref child) => child[(idx >> 4) & 0xf],

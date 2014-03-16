@@ -24,7 +24,7 @@ use std::iter::range_step_inclusive;
 use std::mem::size_of;
 use std::num::abs;
 use std::str::from_utf8;
-use std::vec;
+use std::vec_ng::Vec;
 
 use inflate::InflateStream;
 
@@ -66,7 +66,7 @@ pub struct Image {
     width: u32,
     height: u32,
     color_type: ColorType,
-    pixels: ~[u8]
+    pixels: Vec<u8>
 }
 
 pub enum ImageState<'a> {
@@ -179,7 +179,7 @@ impl Ihdr {
                 width: self.width,
                 height: self.height,
                 color_type: color_decoded,
-                pixels: vec::from_elem(w * h * pixel_bytes, 0u8)
+                pixels: Vec::from_elem(w * h * pixel_bytes, 0u8)
             },
             color_type: color_type,
             filter: 0,
@@ -190,7 +190,6 @@ impl Ihdr {
             x_byte_pos: 0,
             y_byte_pos: 0,
             scanline_bytes: w * pixel_bytes,
-            //scanline: vec::from_elem((w * pixel_bits_raw + 7) / 8, 0u8),
             scanline_pos: None,
             pixel_prev: [0, ..4],
             pixel_bytes_raw: (pixel_bits_raw + 7) / 8,
@@ -258,13 +257,12 @@ struct PartialImage {
     color_type: ColorType,
     filter: u8,
     interlace: u8,
-    palette: Option<~[u8]>,
+    palette: Option<Vec<u8>>,
     transparent_color: Option<[u16, ..3]>,
     idat_inflate_stream: Option<~InflateStream>,
     x_byte_pos: uint,
     y_byte_pos: uint,
     scanline_bytes: uint,
-    //scanline: ~[u8], // TODO(eddyb) optionalize?
     scanline_pos: Option<uint>,
     pixel_prev: [u8, ..4],
     pixel_bytes_raw: uint, // FIXME(eddyb) don't waste space.
@@ -477,7 +475,7 @@ impl PartialImage {
         let next_line = self.y_byte_pos + self.scanline_bytes;
 
         {
-            let pixels: &mut [u8] = self.image.pixels;
+            let pixels = self.image.pixels.as_mut_slice();
 
             macro_rules! filter (($x:expr, $pixel_bytes:expr) => ({
                 // HACK(eddyb) this requires the filter to not deref invalid references.
@@ -888,7 +886,7 @@ impl Decoder {
                                         // Ignore a palette that's not used to decode the image.
                                         ok!(IgnoreChunk(size))
                                     } else {
-                                        image.palette = Some(vec::with_capacity(size as uint / 3 * 4));
+                                        image.palette = Some(Vec::with_capacity(size as uint / 3 * 4));
                                         ok!(Plte(size))
                                     }
                                 }
@@ -987,7 +985,7 @@ impl Decoder {
                 let image = self.image.as_mut().unwrap();
                 let palette = image.palette.as_mut().unwrap();
                 for &x in data.slice_to(n as uint).iter() {
-                    palette[i] = x;
+                    *palette.get_mut(i as uint) = x;
                     i += 4;
                 }
                 if left > n {
@@ -1063,6 +1061,7 @@ pub fn is_png(image: &[u8]) -> bool {
     }
 }*/
 
+#[allow(deprecated_owned_vector)]
 pub fn load_png(path: &Path) -> Result<Image, ~str> {
     match File::open_mode(path, io::Open, io::Read) {
         Ok(mut r) => match r.read_to_end() {
@@ -1114,7 +1113,7 @@ mod test {
                 Err(m) => fail!("could not open file {}", m),
             };
 
-            let mut buf = vec::from_elem(chunk_size, 0u8);
+            let mut buf = Vec::from_elem(chunk_size, 0u8);
             let mut decoder = Some(~Decoder::new());
             loop {
                 match reader.read(buf.mut_slice(0, chunk_size)) {

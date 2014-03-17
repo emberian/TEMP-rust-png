@@ -9,9 +9,12 @@
 
 #[crate_id = "png#0.1"];
 #[crate_type = "lib"];
-#[feature(macro_rules)];
+#[feature(macro_rules, phase)];
 
 #[deny(warnings)];
+
+#[phase(syntax, link)]
+extern crate log;
 
 #[cfg(test)]
 extern crate extra;

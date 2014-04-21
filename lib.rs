@@ -7,11 +7,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[crate_id = "png#0.1"];
-#[crate_type = "lib"];
-#[feature(macro_rules, phase)];
+#![crate_id = "png#0.1"]
+#![crate_type = "lib"]
+#![feature(macro_rules, phase)]
 
-#[deny(warnings)];
+#![deny(warnings)]
 
 #[phase(syntax, link)]
 extern crate log;
@@ -27,7 +27,6 @@ use std::iter::range_step_inclusive;
 use std::mem::size_of;
 use std::num::abs;
 use std::str::from_utf8;
-use std::vec_ng::Vec;
 
 use inflate::InflateStream;
 
@@ -775,8 +774,8 @@ enum U32Next {
 }
 
 pub struct Decoder {
-    priv state: Option<State>,
-    priv image: Option<PartialImage>
+    state: Option<State>,
+    image: Option<PartialImage>
 }
 
 impl Decoder {
@@ -808,8 +807,8 @@ impl Decoder {
 
         match state {
             CheckMagic(i) => {
-                if b != MAGIC[i] {
-                    Err(format!("PNG header mismatch, expected {:#02x} but found {:#02x} for byte {}", MAGIC[i], b, i))
+                if b != MAGIC[i as uint] {
+                    Err(format!("PNG header mismatch, expected {:#02x} but found {:#02x} for byte {}", MAGIC[i as uint], b, i))
                 } else if i < 7 {
                     ok!(CheckMagic(i + 1))
                 } else {
@@ -1068,7 +1067,7 @@ pub fn is_png(image: &[u8]) -> bool {
 pub fn load_png(path: &Path) -> Result<Image, ~str> {
     match File::open_mode(path, io::Open, io::Read) {
         Ok(mut r) => match r.read_to_end() {
-            Ok(data) => load_png_from_memory(data),
+            Ok(data) => load_png_from_memory(data.as_slice()),
             Err(m) => Err(m.to_str())
         },
         Err(m) => Err(m.to_str())

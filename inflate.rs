@@ -9,8 +9,7 @@
 
 use std::iter::range_inclusive;
 use std::cmp;
-use std::vec;
-use std::vec_ng::Vec;
+use std::slice;
 
 static BIT_REV_U8: [u8, ..256] = [
     0b0000_0000, 0b1000_0000, 0b0100_0000, 0b1100_0000,
@@ -103,7 +102,7 @@ struct BitState {
 }
 
 struct BitStream<'a> {
-    bytes: vec::Items<'a, u8>,
+    bytes: slice::Items<'a, u8>,
     used: uint,
     state: BitState
 }
@@ -176,20 +175,20 @@ macro_rules! with_codes (($clens:expr, $max_bits:expr => $code_ty:ty, $cb:expr) 
     let mut bl_count = [0 as $code_ty, ..($max_bits+1)];
     for &bits in $clens.iter() {
         if bits != 0 {
-            bl_count[bits] += 1;
+            bl_count[bits as uint] += 1;
         }
     }
 
     // Compute the first code value for each bit length.
     let mut next_code = [0 as $code_ty, ..($max_bits+1)];
     for bits in range_inclusive(1, $max_bits) {
-        next_code[bits] = (next_code[bits - 1] + bl_count[bits - 1]) << 1;
+        next_code[bits as uint] = (next_code[bits as uint - 1] + bl_count[bits as uint - 1]) << 1;
     }
 
     for (i, &bits) in $clens.iter().enumerate() {
         if bits != 0 {
-            let code = next_code[bits];
-            next_code[bits] += 1;
+            let code = next_code[bits as uint];
+            next_code[bits as uint] += 1;
             $cb(i as $code_ty, code, bits);
         }
     }
@@ -208,9 +207,9 @@ impl CodeLengthReader {
         // Fill in the 7-bit patterns that match each code.
         let mut patterns = ~([0xffu8, ..128]);
         with_codes!(clens, 7 => u8, |i: u8, code: u8, bits| {
-            let base = BIT_REV_U8[code << (8 - bits)];
+            let base = BIT_REV_U8[(code << (8 - bits)) as uint];
             for rest in range(0u8, 1 << (7 - bits)) {
-                patterns[base | (rest << bits)] = i;
+                patterns[(base | (rest << bits)) as uint] = i;
             }
         });
 
@@ -237,8 +236,8 @@ impl CodeLengthReader {
                     return false;
                 }
             }))
-            let code = self.patterns[stream.state.v & 0x7f];
-            stream.take(self.clens[code]);
+            let code = self.patterns[(stream.state.v & 0x7f) as uint];
+            stream.take(self.clens[code as uint]);
             match code {
                 0..15 => self.result.push(code),
                 16 => {
@@ -286,16 +285,16 @@ impl DynHuffman16 {
         with_codes!(clens, 15 => u16, |i: u16, code: u16, bits: u8| {
             let entry = i | (bits as u16 << 12);
             if bits <= 8 {
-                let base = BIT_REV_U8[code << (8 - bits)];
+                let base = BIT_REV_U8[(code << (8 - bits)) as uint];
                 for rest in range(0u8, 1 << (8 - bits)) {
-                    patterns[base | (rest << bits)] = entry;
+                    patterns[(base | (rest << bits)) as uint] = entry;
                 }
             } else {
-                let low = BIT_REV_U8[code >> (bits - 8)];
-                let high = BIT_REV_U8[(code << (16 - bits)) & 0xff];
-                let (min_bits, idx) = if patterns[low] != 0xffff {
-                    let bits_prev = (patterns[low] >> 12) as u8;
-                    (cmp::min(bits_prev, bits), patterns[low] & 0x7ff)
+                let low = BIT_REV_U8[(code >> (bits - 8)) as uint];
+                let high = BIT_REV_U8[((code << (16 - bits)) & 0xff) as uint];
+                let (min_bits, idx) = if patterns[low as uint] != 0xffff {
+                    let bits_prev = (patterns[low as uint] >> 12) as u8;
+                    (cmp::min(bits_prev, bits), patterns[low as uint] & 0x7ff)
                 } else {
                     rest.push(Trie8bit {
                         data: [0xffff, ..16],
@@ -308,21 +307,21 @@ impl DynHuffman16 {
                     });
                     (bits, (rest.len() - 1) as u16)
                 };
-                patterns[low] = idx | 0x800 | (min_bits as u16 << 12);
+                patterns[low as uint] = idx | 0x800 | (min_bits as u16 << 12);
                 let trie_entry = rest.get_mut(idx as uint);
                 if bits <= 12 {
                     for rest in range(0u8, 1 << (12 - bits)) {
-                        trie_entry.data[high | (rest << (bits - 8))] = entry;
+                        trie_entry.data[(high | (rest << (bits - 8))) as uint] = entry;
                     }
                 } else {
-                    let child = &mut trie_entry.children[high & 0xf];
+                    let child = &mut trie_entry.children[(high & 0xf) as uint];
                     if child.is_none() {
                         *child = Some(~([0xffff, ..16]));
                     }
                     let ~ref mut child = *child.as_mut().unwrap();
                     let high_top = high >> 4;
                     for rest in range(0u8, 1 << (16 - bits)) {
-                        child[high_top | (rest << (bits - 12))] = entry;
+                        child[(high_top | (rest << (bits - 12))) as uint] = entry;
                     }
                 }
             }
@@ -335,7 +334,7 @@ impl DynHuffman16 {
 
     fn read(&self, stream: &mut BitStream) -> Option<(BitState, u16)> {
         let has8 = stream.need(8);
-        let entry = self.patterns[stream.state.v & 0xff];
+        let entry = self.patterns[(stream.state.v & 0xff) as uint];
         let bits = (entry >> 12) as u8;
 
         if !has8 {
@@ -356,9 +355,9 @@ impl DynHuffman16 {
             let has16 = stream.need(16);
             let trie = self.rest.get((entry & 0x7ff) as uint);
             let idx = stream.state.v >> 8;
-            let trie_entry = match trie.children[idx & 0xf] {
-                Some(ref child) => child[(idx >> 4) & 0xf],
-                None => trie.data[idx & 0xf]
+            let trie_entry = match trie.children[(idx & 0xf) as uint] {
+                Some(ref child) => child[((idx >> 4) & 0xf) as uint],
+                None => trie.data[(idx & 0xf) as uint]
             };
             let trie_bits = (trie_entry >> 12) as u8;
             if has16 || trie_bits <= stream.state.n {
@@ -394,10 +393,10 @@ enum BitsNext {
 }
 
 pub struct InflateStream {
-    priv buffer: Vec<u8>,
-    priv pos: u16,
-    priv state: Option<State>,
-    priv final_block: bool,
+    buffer: Vec<u8>,
+    pos: u16,
+    state: Option<State>,
+    final_block: bool,
 }
 
 impl InflateStream {
@@ -490,7 +489,7 @@ impl InflateStream {
             let b = $b;
             //debug_byte(self.pos, b);
             if (self.pos as uint) < self.buffer.len() {
-                self.buffer.as_mut_slice()[self.pos] = b;
+                self.buffer.as_mut_slice()[self.pos as uint] = b;
             } else {
                 if (self.pos as uint) != self.buffer.len() {
                     abort();
@@ -674,7 +673,7 @@ impl InflateStream {
                                 (stream.state.v & 0b1100) != 0b1100 {
                                 //let save = stream.state;
                                 // FIXME(eddyb) use a 7-bit rev LUT or match the huffman code directly.
-                                let code = BIT_REV_U8[stream.take(7).unwrap() << 1];
+                                let code = BIT_REV_U8[(stream.take(7).unwrap() << 1) as uint];
                                 match code {
                                     0 => return if self.final_block {
                                         ok_state!(CheckCRC)
@@ -699,7 +698,7 @@ impl InflateStream {
                                 //let taken = take(8);
                                 //debug!("8bit {:08t} {:08t}", taken, BIT_REV_U8[taken]);
                                 // FIXME(eddyb) use a specialized rev LUT with addend.
-                                let code = BIT_REV_U8[stream.take(8).unwrap()] - 0b0011_0000;
+                                let code = BIT_REV_U8[(stream.take(8).unwrap()) as uint] - 0b0011_0000;
                                 push_or!(code, {stream.state = save; ok!(next)});
                                 continue;
                             }
@@ -707,7 +706,7 @@ impl InflateStream {
                             if (stream.state.v & 0b11100) == 0b00000 {
                                 //let save = stream.state;
                                 // FIXME(eddyb) use a 3-bit rev LUT or match the huffman code directly.
-                                let code = 24 + (BIT_REV_U8[stream.take(8).unwrap() << 1] & 0b111);
+                                let code = 24 + (BIT_REV_U8[(stream.take(8).unwrap() << 1) as uint] & 0b111);
                                 match code {
                                     24 => len!(24, 4),
                                     25..28 => len!(code, 5),
@@ -722,7 +721,7 @@ impl InflateStream {
                             // 110010000 through 111111111
                             let save = stream.state;
                             // FIXME(eddyb) use a specialized rev LUT with addend.
-                            let code = 144 + BIT_REV_U8[stream.take16(9).unwrap() >> 1] - 0b1001_0000;
+                            let code = 144 + BIT_REV_U8[(stream.take16(9).unwrap() >> 1) as uint] - 0b1001_0000;
                             //debug!("DEFLATE 9bit 0x{:02x}", code);
                             push_or!(code, {stream.state = save; ok!(next)});
                         }
@@ -737,7 +736,7 @@ impl InflateStream {
                             Some(v) => v,
                             None => return ok!(BlockDynClenCodeLengths(hlit, hdist, hclen, i, clens))
                         };
-                        clens[[16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15][i]] = v;
+                        clens[[16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15][i as uint]] = v;
                         if i < hclen - 1 {
                             ok!(BlockDynClenCodeLengths(hlit, hdist, hclen, i + 1, clens))
                         } else {

@@ -65,10 +65,10 @@ impl ColorType {
 }
 
 pub struct Image {
-    width: u32,
-    height: u32,
-    color_type: ColorType,
-    pixels: Vec<u8>
+    pub width: u32,
+    pub height: u32,
+    pub color_type: ColorType,
+    pub pixels: Vec<u8>
 }
 
 pub enum ImageState<'a> {

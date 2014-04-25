@@ -301,7 +301,7 @@ impl PartialImage {
                 }
                 2 => {
                     let (_, _, _, dy) = self.interlace_params();
-                    if self.y_byte_pos < (dy + 1) * self.scanline_bytes {
+                    if self.y_byte_pos < dy * self.scanline_bytes {
                         self.update_scanline(line, NoFilter);
                     } else {
                         self.update_scanline(line, Up);
@@ -309,7 +309,7 @@ impl PartialImage {
                 }
                 3 => {
                     let (_, _, _, dy) = self.interlace_params();
-                    if self.y_byte_pos < (dy + 1) * self.scanline_bytes {
+                    if self.y_byte_pos < dy * self.scanline_bytes {
                         // FIXME(eddyb) maybe it's forbidden to have Average for the first scanline?
                         if i < self.pixel_bytes_raw {
                             let noop = min(self.pixel_bytes_raw - i, line.len());
@@ -330,7 +330,7 @@ impl PartialImage {
                 }
                 4 => {
                     let (_, _, _, dy) = self.interlace_params();
-                    if self.y_byte_pos < (dy + 1) * self.scanline_bytes {
+                    if self.y_byte_pos < dy * self.scanline_bytes {
                         // FIXME(eddyb) maybe it's forbidden to have Paeth for the first scanline?
                         if i < self.pixel_bytes_raw {
                             let noop = min(self.pixel_bytes_raw - i, line.len());
@@ -472,6 +472,7 @@ impl PartialImage {
     fn update_scanline_with_dx<DX, F: Filter>(&mut self, mut data: &[u8], mut f: F) {
         // HACK extract dx from the size of DX = [u8, ..dx].
         let dx = ::std::mem::size_of::<DX>();
+        let (x0, _, _, dy) = self.interlace_params();
 
         let mut i = self.y_byte_pos + self.x_byte_pos;
         let next_line = self.y_byte_pos + self.scanline_bytes;
@@ -483,8 +484,8 @@ impl PartialImage {
                 // HACK(eddyb) this requires the filter to not deref invalid references.
                 let (a, b, c): (&u8, &u8, &u8) = unsafe {(
                     cast::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes)),
-                    cast::transmute(pixels.unsafe_ref(i - self.scanline_bytes)),
-                    cast::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes - self.scanline_bytes))
+                    cast::transmute(pixels.unsafe_ref(i - dy * self.scanline_bytes)),
+                    cast::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes - dy * self.scanline_bytes))
                 )};
                 f.apply($x, a, b, c)
             }))
@@ -715,7 +716,6 @@ impl PartialImage {
         if i < next_line {
             self.x_byte_pos = i - self.y_byte_pos;
         } else {
-            let (x0, _, _, dy) = self.interlace_params();
             let pixel_bytes = self.image.color_type.pixel_bits() / 8;
 
             self.x_byte_pos = x0 * pixel_bytes;

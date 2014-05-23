@@ -393,7 +393,7 @@ enum BitsNext {
 }
 
 pub struct InflateStream {
-    buffer: Vec<u8>,
+    buffer: Box<Vec<u8>>,
     pos: u16,
     state: Option<State>,
     final_block: bool,
@@ -413,7 +413,7 @@ impl InflateStream {
 
     fn with_state_and_buffer(state: State, buffer: Vec<u8>) -> InflateStream {
         InflateStream {
-            buffer: buffer,
+            buffer: box buffer,
             pos: 0,
             state: Some(state),
             final_block: false
@@ -524,7 +524,7 @@ impl InflateStream {
                     return Err(format!("invalid ZLIB info CINFO=0x{:x}", info));
                 }
 
-                self.buffer = Vec::with_capacity(1 << (8 + info));
+                self.buffer = box Vec::with_capacity(1 << (8 + info));
 
                 ok_bytes!(1, ZlibFlags(b))
             }

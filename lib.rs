@@ -19,12 +19,11 @@ extern crate log;
 #[cfg(test)]
 extern crate extra;
 
-use std::cast;
 use std::cmp::min;
 use std::io;
 use std::io::File;
 use std::iter::range_step_inclusive;
-use std::mem::size_of;
+use std::mem;
 use std::num::abs;
 use std::str::from_utf8;
 
@@ -147,7 +146,7 @@ impl Ihdr {
 
         let color_decoded = match color_type {
             K1 | K2 | K4 | K8 | KA8 => KA8,
-            K16 | KA16 | RGB16 | RGBA16 => return Err(~"unsupported bit depth of 16"),
+            K16 | KA16 | RGB16 | RGBA16 => return Err("unsupported bit depth of 16".to_owned()),
             _ => RGBA8
         };
 
@@ -261,7 +260,7 @@ struct PartialImage {
     interlace: u8,
     palette: Option<Vec<u8>>,
     transparent_color: Option<[u16, ..3]>,
-    idat_inflate_stream: Option<~InflateStream>,
+    idat_inflate_stream: Option<InflateStream>,
     x_byte_pos: uint,
     y_byte_pos: uint,
     scanline_bytes: uint,
@@ -471,7 +470,7 @@ impl PartialImage {
 
     fn update_scanline_with_dx<DX, F: Filter>(&mut self, mut data: &[u8], mut f: F) {
         // HACK extract dx from the size of DX = [u8, ..dx].
-        let dx = ::std::mem::size_of::<DX>();
+        let dx = std::mem::size_of::<DX>();
         let (x0, _, _, dy) = self.interlace_params();
 
         let mut i = self.y_byte_pos + self.x_byte_pos;
@@ -483,9 +482,9 @@ impl PartialImage {
             macro_rules! filter (($x:expr, $pixel_bytes:expr) => ({
                 // HACK(eddyb) this requires the filter to not deref invalid references.
                 let (a, b, c): (&u8, &u8, &u8) = unsafe {(
-                    cast::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes)),
-                    cast::transmute(pixels.unsafe_ref(i - dy * self.scanline_bytes)),
-                    cast::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes - dy * self.scanline_bytes))
+                    mem::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes)),
+                    mem::transmute(pixels.unsafe_ref(i - dy * self.scanline_bytes)),
+                    mem::transmute(pixels.unsafe_ref(i - dx * $pixel_bytes - dy * self.scanline_bytes))
                 )};
                 f.apply($x, a, b, c)
             }))
@@ -802,7 +801,7 @@ impl Decoder {
 
         let state = match self.state {
             Some(state) => state,
-            None => return Err(~"called png::Decoder::next_state with non-existent state")
+            None => return Err("called png::Decoder::next_state with non-existent state".to_owned())
         };
 
         match state {
@@ -866,9 +865,9 @@ impl Decoder {
                 match name {
                     "IHDR" => {
                         if self.image.is_some() {
-                            Err(~"duplicate IHDR")
-                        } else if size != size_of::<Ihdr>() as u32 {
-                            Err(format!("IHDR size mismatch, expected {} but found {}", size_of::<Ihdr>(), size))
+                            Err("duplicate IHDR".to_owned())
+                        } else if size != std::mem::size_of::<Ihdr>() as u32 {
+                            Err(format!("IHDR size mismatch, expected {} but found {}", std::mem::size_of::<Ihdr>(), size))
                         } else {
                             ok_u32!(U32IhdrWidth)
                         }
@@ -878,12 +877,12 @@ impl Decoder {
                             Err(format!("PLTE has non multiple of 3 size {}", size))
                         } else {
                             match self.image {
-                                None => Err(~"PLTE before IHDR"),
+                                None => Err("PLTE before IHDR".to_owned()),
                                 Some(ref mut image) => {
                                     if image.idat_inflate_stream.is_some() {
-                                        Err(~"PLTE after IDAT")
+                                        Err("PLTE after IDAT".to_owned())
                                     } else if image.palette.is_some() {
-                                        Err(~"duplicate PLTE")
+                                        Err("duplicate PLTE".to_owned())
                                     } else if !image.color_type.is_palette() {
                                         // Ignore a palette that's not used to decode the image.
                                         ok!(IgnoreChunk(size))
@@ -897,10 +896,10 @@ impl Decoder {
                     }
                     "tRNS" => {
                         match self.image {
-                            None => Err(~"tRNS before IHDR"),
+                            None => Err("tRNS before IHDR".to_owned()),
                             Some(ref mut image) => {
                                 if image.idat_inflate_stream.is_some() {
-                                    Err(~"tRNS after IDAT")
+                                    Err("tRNS after IDAT".to_owned())
                                 } else {
                                     match image.color_type {
                                         K1 | K2 | K4 | K8 | K16 => ok!(U16(U16TrnsK)),
@@ -914,14 +913,14 @@ impl Decoder {
                     }
                     "IDAT" => {
                         if self.image.is_none() {
-                            Err(~"IDAT before IHDR")
+                            Err("IDAT before IHDR".to_owned())
                         } else if self.image.as_ref().unwrap().color_type.is_palette()
                             && self.image.as_ref().unwrap().palette.is_none() {
-                            Err(~"IDAT before PLTE")
+                            Err("IDAT before PLTE".to_owned())
                         } else {
                             let stream = &mut self.image.as_mut().unwrap().idat_inflate_stream;
                             if stream.is_none() {
-                                *stream = Some(~InflateStream::from_zlib());
+                                *stream = Some(InflateStream::from_zlib());
                             }
                             ok!(IdatInflate(size))
                         }
@@ -1036,7 +1035,7 @@ pub trait DecoderRef {
     fn update<'a>(&'a mut self, data: &[u8]) -> ImageState<'a>;
 }
 
-impl DecoderRef for Option<~Decoder> {
+impl DecoderRef for Option<Decoder> {
     fn update<'a>(&'a mut self, data: &[u8]) -> ImageState<'a> {
         match self.take() {
             Some(mut decoder) => {
@@ -1049,7 +1048,7 @@ impl DecoderRef for Option<~Decoder> {
                     _ => Complete(decoder.image.take_unwrap().image)
                 }
             }
-            None => Error(~"called Option<~png::Decoder>::update on None")
+            None => Error("called Option<~png::Decoder>::update on None".to_owned())
         }
     }
 }
@@ -1075,9 +1074,9 @@ pub fn load_png(path: &Path) -> Result<Image, ~str> {
 }
 
 pub fn load_png_from_memory(image: &[u8]) -> Result<Image, ~str> {
-    let mut decoder = Some(~Decoder::new());
+    let mut decoder = Some(Decoder::new());
     match decoder.update(image) {
-        Partial(_) => Err(~"incomplete PNG file"),
+        Partial(_) => Err("incomplete PNG file".to_owned()),
         Complete(image) => Ok(image),
         Error(m) => Err(m)
     }
@@ -1116,7 +1115,7 @@ mod test {
             };
 
             let mut buf = Vec::from_elem(chunk_size, 0u8);
-            let mut decoder = Some(~Decoder::new());
+            let mut decoder = Some(Decoder::new());
             loop {
                 match reader.read(buf.mut_slice(0, chunk_size)) {
                     Ok(count) => match decoder.update(buf.slice_to(count)) {

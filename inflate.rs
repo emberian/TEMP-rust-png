@@ -195,17 +195,17 @@ macro_rules! with_codes (($clens:expr, $max_bits:expr => $code_ty:ty, $cb:expr) 
 }))
 
 struct CodeLengthReader {
-    patterns: ~[u8, ..128],
-    clens: ~[u8, ..19],
+    patterns: [u8, ..128],
+    clens: [u8, ..19],
     result: Vec<u8>,
     num_lit: u16,
     num_dist: u8
 }
 
 impl CodeLengthReader {
-    fn new(clens: ~[u8, ..19], num_lit: u16, num_dist: u8) -> CodeLengthReader {
+    fn new(clens: [u8, ..19], num_lit: u16, num_dist: u8) -> CodeLengthReader {
         // Fill in the 7-bit patterns that match each code.
-        let mut patterns = ~([0xffu8, ..128]);
+        let mut patterns = [0xffu8, ..128];
         with_codes!(clens, 7 => u8, |i: u8, code: u8, bits| {
             let base = BIT_REV_U8[(code << (8 - bits)) as uint];
             for rest in range(0u8, 1 << (7 - bits)) {
@@ -268,11 +268,11 @@ impl CodeLengthReader {
 
 struct Trie8bit<T> {
     data: [T, ..16],
-    children: [Option<~[T, ..16]>, ..16]
+    children: [Option<[T, ..16]>, ..16]
 }
 
 struct DynHuffman16 {
-    patterns: ~[u16, ..256],
+    patterns: [u16, ..256],
     rest: Vec<Trie8bit<u16>>
 }
 
@@ -280,7 +280,7 @@ impl DynHuffman16 {
     fn new(clens: &[u8]) -> DynHuffman16 {
         // Fill in the 8-bit patterns that match each code.
         // Longer patterns go into the trie.
-        let mut patterns = ~([0xffffu16, ..256]);
+        let mut patterns = [0xffffu16, ..256];
         let mut rest = Vec::new();
         with_codes!(clens, 15 => u16, |i: u16, code: u16, bits: u8| {
             let entry = i | (bits as u16 << 12);
@@ -316,9 +316,9 @@ impl DynHuffman16 {
                 } else {
                     let child = &mut trie_entry.children[(high & 0xf) as uint];
                     if child.is_none() {
-                        *child = Some(~([0xffff, ..16]));
+                        *child = Some([0xffffu16, ..16]);
                     }
-                    let ~ref mut child = *child.as_mut().unwrap();
+                    let ref mut child = *child.as_mut().unwrap();
                     let high_top = high >> 4;
                     for rest in range(0u8, 1 << (16 - bits)) {
                         child[(high_top | (rest << (bits - 12))) as uint] = entry;
@@ -387,13 +387,13 @@ enum BitsNext {
     BlockDynHlit,
     BlockDynHdist(/* hlit */ u8),
     BlockDynHclen(/* hlit */ u8, /* hdist */ u8),
-    BlockDynClenCodeLengths(/* hlit */ u8, /* hdist */ u8, /* hclen */ u8, /* idx */ u8, /* clens */ ~[u8, ..19]),
+    BlockDynClenCodeLengths(/* hlit */ u8, /* hdist */ u8, /* hclen */ u8, /* idx */ u8, /* clens */ [u8, ..19]),
     BlockDynCodeLengths(CodeLengthReader),
     BlockDyn(/* lit/len */ DynHuffman16, /* dist */ DynHuffman16)
 }
 
 pub struct InflateStream {
-    buffer: Vec<u8>,
+    buffer: Box<Vec<u8>>,
     pos: u16,
     state: Option<State>,
     final_block: bool,
@@ -413,7 +413,7 @@ impl InflateStream {
 
     fn with_state_and_buffer(state: State, buffer: Vec<u8>) -> InflateStream {
         InflateStream {
-            buffer: buffer,
+            buffer: box buffer,
             pos: 0,
             state: Some(state),
             final_block: false
@@ -524,7 +524,7 @@ impl InflateStream {
                     return Err(format!("invalid ZLIB info CINFO=0x{:x}", info));
                 }
 
-                self.buffer = Vec::with_capacity(1 << (8 + info));
+                self.buffer = box Vec::with_capacity(1 << (8 + info));
 
                 ok_bytes!(1, ZlibFlags(b))
             }
@@ -538,7 +538,7 @@ impl InflateStream {
                 }
 
                 if dict {
-                    return Err(~"unimplemented ZLIB FDICT=1");
+                    return Err("unimplemented ZLIB FDICT=1".to_owned());
                 }
 
                 ok_bytes!(1, Bits(BlockHeader, BitState { n: 0, v: 0 }))
@@ -581,7 +581,7 @@ impl InflateStream {
                         let (final, block_type) = ((h & 1) != 0, (h >> 1) & 0b11);
 
                         if self.final_block {
-                            return Err(~"DEFLATE data after the final block");
+                            return Err("DEFLATE data after the final block".to_owned());
                         }
 
                         self.final_block = final;
@@ -729,7 +729,7 @@ impl InflateStream {
                     BlockDynHlit => ok!(BlockDynHdist(take!(5) + 1)),
                     BlockDynHdist(hlit) => ok!(BlockDynHclen(hlit, take!(5) + 1)),
                     BlockDynHclen(hlit, hdist) => {
-                        ok!(BlockDynClenCodeLengths(hlit, hdist, take!(4) + 4, 0, ~([0, ..19])))
+                        ok!(BlockDynClenCodeLengths(hlit, hdist, take!(4) + 4, 0, [0, ..19]))
                     }
                     BlockDynClenCodeLengths(hlit, hdist, hclen, i, mut clens) => {
                         let v = match stream.take(3) {
